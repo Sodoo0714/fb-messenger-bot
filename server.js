@@ -30,8 +30,10 @@ app.get('/webhook', (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/webhook', (req, res) => {
   const body = req.body;
+  console.log('Webhook event received:', JSON.stringify(body));
 
   if (body.object !== 'page') {
+    console.log('Ignored: not a page event, object =', body.object);
     return res.sendStatus(404);
   }
 
