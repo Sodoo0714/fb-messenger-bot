@@ -1,0 +1,15 @@
+{
+  "name": "fb-messenger-bot",
+  "version": "1.0.0",
+  "description": "Self-hosted Facebook Messenger bot using the Messenger Platform API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
