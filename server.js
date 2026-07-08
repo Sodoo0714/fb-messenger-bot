@@ -137,5 +137,26 @@ async function callSendAPI(payload) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 5. PRIVACY POLICY PAGE (required by Meta before an app can go Live)
+// ---------------------------------------------------------------------------
+app.get('/privacy', (req, res) => {
+  res.set('Content-Type', 'text/html');
+  res.send(`
+    <html>
+      <head><title>Privacy Policy</title></head>
+      <body style="font-family: sans-serif; max-width: 700px; margin: 40px auto; line-height: 1.6;">
+        <h1>Privacy Policy</h1>
+        <p>This Messenger bot is operated to help people communicate with our Facebook Page.</p>
+        <p>When you message our Page, we receive your Facebook user ID and the content of your
+        messages. This information is used only to respond to your questions and provide
+        customer support. We do not sell or share this information with third parties.</p>
+        <p>You can stop this at any time by simply not messaging the Page. If you have questions
+        about this policy, please contact us directly through the Page.</p>
+      </body>
+    </html>
+  `);
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Bot server running on port ${PORT}`));
