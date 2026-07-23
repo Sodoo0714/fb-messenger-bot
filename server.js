@@ -14,17 +14,35 @@ const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const GRAPH_API_VERSION = 'v20.0';
 
 // ---------------------------------------------------------------------------
-// ЭМНЭЛГИЙН МЭДЭЭЛЭЛ — ЗАСАХ ХЭСЭГ (өөрийн бодит мэдээллээр шинэчилнэ үү!)
+// ЭМНЭЛГИЙН МЭДЭЭЛЭЛ
 // ---------------------------------------------------------------------------
 const INFO = {
-  phone: '7035-0888, 9935-2335', // ЗАСАХ: лавлах утас зөв эсэхийг шалгана уу
-  hours: 'Даваа–Ням 24 цаг ажиллана.', // ЗАСАХ: ажлын цаг, амралтын өдрөөр ажилладаг бол нэмнэ үү
+  phone: '7035-08888, 9935-2335',
+  hours: 'Даваа–Баасан: 24 цагаар',
   address:
-    'Орхон аймаг, Баян-Өндөр сум, Хүрэнбулаг баг, 4 байр\n(Бадархундага Рашаан эмнэлэг)', // ЗАСАХ
+    'Эрдэнэт хот, 11-р хороолол,\nхойд дугуй дэлгүүрийн баруун хойшоо\nшороон замаар өгсөх замд',
   website: 'https://badarhundaga.mn',
   services:
-    'Манай эмнэлэг дараах үйлчилгээг үзүүлдэг:\n• Рашаан эмчилгээ\n• Дотрын үзлэг, оношилгоо\n• Сэргээн засах эмчилгээ', // ЗАСАХ: бодит тасаг/үйлчилгээгээ жагсаана уу
+    'Манай эмнэлгийн үйлчилгээнүүд:\n' +
+    '\n🏥 Хэвтэн эмчилгээ\n' +
+    '• Дотрын эмчилгээ\n' +
+    '• Уламжлалт эмчилгээ\n' +
+    '\n☀️ Өдрийн эмчилгээ\n' +
+    '• Эмийн эмчилгээ\n' +
+    '• Бариа засал\n' +
+    '\n🩺 Амбулаторийн үзлэг\n' +
+    '• Дотрын эмчийн үзлэг\n' +
+    '• Уламжлалт эмчилгээний үзлэг\n' +
+    '\n🔬 Лабораторийн шинжилгээ\n' +
+    '• Цусны дэлгэрэнгүй шинжилгээ\n' +
+    '• Биохимийн шинжилгээ\n' +
+    '• Шээсний ерөнхий шинжилгээ\n' +
+    '• В, С вирусын шинжилгээ\n' +
+    '• Цусан дахь сахарын шинжилгээ',
 };
+
+// Байршлын зураг — badarhundaga-website repo-д bairshil.jpg нэрээр байршуулна
+const LOCATION_IMAGE_URL = 'https://badarhundaga.mn/bairshil.jpg';
 
 // ---------------------------------------------------------------------------
 // 1. WEBHOOK VERIFICATION
@@ -41,14 +59,12 @@ app.get('/webhook', (req, res) => {
   return res.sendStatus(403);
 });
 
-// Health check / keep-alive ping (cron-job.org энэ зам руу ping хийнэ)
+// Health check / keep-alive ping
 app.get('/', (req, res) => res.status(200).send('OK'));
 
 // ---------------------------------------------------------------------------
 // 2. RECEIVING MESSAGES
 // ---------------------------------------------------------------------------
-
-// Давхардсан илгээлтийг шүүх: Meta нэг мессежийг retry хийж давтан илгээдэг
 const seenMids = new Set();
 const seenOrder = [];
 function isDuplicate(mid) {
@@ -61,7 +77,6 @@ function isDuplicate(mid) {
 }
 
 app.post('/webhook', (req, res) => {
-  // Meta-д ЭХЛЭЭД 200 хариу өгнө (5 секундын дүрэм) — дараа нь боловсруулна
   res.status(200).send('EVENT_RECEIVED');
 
   const body = req.body;
@@ -77,21 +92,20 @@ app.post('/webhook', (req, res) => {
       if (!senderId) return;
 
       if (event.message) {
-        if (event.message.is_echo) return; // Page-ийн өөрийн илгээсэн мессежийг алгасах
+        if (event.message.is_echo) return;
         if (isDuplicate(event.message.mid)) {
           console.log('Duplicate skipped:', event.message.mid);
           return;
         }
-        // ЧУХАЛ: quick_reply-г text-ээс ӨМНӨ шалгана (quick reply нь хоёуланг агуулдаг)
         if (event.message.quick_reply) {
           return handleQuickReply(senderId, event.message.quick_reply.payload);
         }
         if (event.message.text) {
           return handleMessage(senderId, event.message.text);
         }
-        // Зураг, стикер г.м. текстгүй мессеж
-        return sendText(senderId, 'Таны илгээсэн зүйлийг хүлээж авлаа. Асуух зүйл байвал бичээрэй!', () =>
-          sendMainMenu(senderId)
+        return sendTextWithMenu(
+          senderId,
+          'Таны илгээсэн зүйлийг хүлээж авлаа. Асуух зүйл байвал бичээрэй!'
         );
       } else if (event.postback) {
         return handleQuickReply(senderId, event.postback.payload);
@@ -105,7 +119,6 @@ app.post('/webhook', (req, res) => {
 // ---------------------------------------------------------------------------
 function handleMessage(senderId, text) {
   const msg = text.trim().toLowerCase();
-
   const hasAny = (keywords) => keywords.some((k) => msg.includes(k));
 
   if (hasAny(['сайн уу', 'сайн байна уу', 'hi', 'hello', 'menu', 'меню', 'start', 'эхлэх'])) {
@@ -113,67 +126,78 @@ function handleMessage(senderId, text) {
   }
 
   if (hasAny(['захиал', 'цаг ав', 'бүртгүүл', 'үзүүлье', 'үзүүлэх'])) {
-    return sendText(
+    return sendTextWithMenu(
       senderId,
-      `Цаг захиалахын тулд манай лавлах утас руу залгана уу:\n📞 ${INFO.phone}\n${INFO.hours}`
+      `Цаг захиалахын тулд манай лавлах утас руу залгана уу:\n📞 ${INFO.phone}\n🕘 ${INFO.hours}`
     );
   }
 
-  if (hasAny(['ажиллах цаг', 'хэдэн цаг', 'нээлттэй', 'хаагдах', 'ажилладаг'])) {
-    return sendText(senderId, `Манай ажиллах цаг:\n🕘 ${INFO.hours}`);
+  if (hasAny(['ажиллах цаг', 'хэдэн цаг', 'нээлттэй', 'хаагдах', 'ажилладаг', 'цагийн хуваарь'])) {
+    return sendTextWithMenu(senderId, `Манай ажиллах цаг:\n🕘 ${INFO.hours}`);
   }
 
-  if (hasAny(['хаяг', 'байршил', 'хаана', 'очих', 'location'])) {
-    return sendText(senderId, `Манай хаяг:\n📍 ${INFO.address}\n🌐 ${INFO.website}`);
+  if (hasAny(['хаяг', 'байршил', 'хаана', 'очих', 'location', 'зам'])) {
+    return sendLocation(senderId);
   }
 
   if (hasAny(['үнэ', 'үнийн', 'төлбөр', 'хэд вэ', 'хэдээр', 'price'])) {
-    return sendText(
+    return sendTextWithMenu(
       senderId,
       `Үйлчилгээний үнийн дэлгэрэнгүй мэдээллийг лавлах утаснаас авна уу:\n📞 ${INFO.phone}\nЭсвэл ямар үйлчилгээ сонирхож байгаагаа бичээрэй.`
     );
   }
 
   if (hasAny(['утас', 'дугаар', 'залгах', 'холбогдох'])) {
-    return sendText(senderId, `Манай лавлах утас:\n📞 ${INFO.phone}`);
+    return sendTextWithMenu(senderId, `Манай лавлах утас:\n📞 ${INFO.phone}`);
   }
 
-  if (hasAny(['үйлчилгээ', 'эмчилгээ', 'рашаан', 'тасаг', 'үзлэг', 'оношилгоо'])) {
-    return sendText(senderId, INFO.services, () => sendMainMenu(senderId));
+  if (
+    hasAny([
+      'үйлчилгээ',
+      'эмчилгээ',
+      'тасаг',
+      'үзлэг',
+      'оношилгоо',
+      'шинжилгээ',
+      'бариа',
+      'лаборатори',
+      'хэвтэх',
+      'хэвтэн',
+    ])
+  ) {
+    return sendTextWithMenu(senderId, INFO.services);
   }
 
   if (hasAny(['баярлалаа', 'баярлаа', 'thanks', 'thank you', 'гоё'])) {
-    return sendText(senderId, 'Баярлалаа! Өөр асуух зүйл байвал бичээрэй. 😊');
+    return sendTextWithMenu(senderId, 'Баярлалаа! Өөр асуух зүйл байвал бичээрэй. 😊');
   }
 
-  // Ойлгоогүй үед: цэсээ санал болгоно
-  return sendText(
+  return sendTextWithMenu(
     senderId,
-    'Уучлаарай, таны асуултыг сайн ойлгосонгүй. Доорх сонголтуудаас сонгох эсвэл асуултаа өөрөөр бичээд үзээрэй.',
-    () => sendMainMenu(senderId)
+    'Уучлаарай, таны асуултыг сайн ойлгосонгүй. Доорх сонголтуудаас сонгох эсвэл асуултаа өөрөөр бичээд үзээрэй.'
   );
 }
 
 function handleQuickReply(senderId, payload) {
   switch (payload) {
     case 'BOOK_APPT':
-      return sendText(
+      return sendTextWithMenu(
         senderId,
-        `Цаг захиалахын тулд манай лавлах утас руу залгана уу:\n📞 ${INFO.phone}\n${INFO.hours}`
+        `Цаг захиалахын тулд манай лавлах утас руу залгана уу:\n📞 ${INFO.phone}\n🕘 ${INFO.hours}`
       );
     case 'GET_HOURS':
-      return sendText(senderId, `Манай ажиллах цаг:\n🕘 ${INFO.hours}`);
+      return sendTextWithMenu(senderId, `Манай ажиллах цаг:\n🕘 ${INFO.hours}`);
     case 'GET_LOCATION':
-      return sendText(senderId, `Манай хаяг:\n📍 ${INFO.address}\n🌐 ${INFO.website}`);
+      return sendLocation(senderId);
     case 'GET_PRICES':
-      return sendText(
+      return sendTextWithMenu(
         senderId,
         `Үйлчилгээний үнийн дэлгэрэнгүй мэдээллийг лавлах утаснаас авна уу:\n📞 ${INFO.phone}\nЭсвэл ямар үйлчилгээ сонирхож байгаагаа бичээрэй.`
       );
     case 'GET_SERVICES':
-      return sendText(senderId, INFO.services);
+      return sendTextWithMenu(senderId, INFO.services);
     case 'TALK_HUMAN':
-      return sendText(
+      return sendTextWithMenu(
         senderId,
         `Манай ажилтан тантай удахгүй холбогдох болно. Яаралтай бол утсаар холбогдоорой:\n📞 ${INFO.phone}\nХүлээцтэй хандсанд баярлалаа!`
       );
@@ -184,36 +208,64 @@ function handleQuickReply(senderId, payload) {
   }
 }
 
+// Байршил: эхлээд зураг, дараа нь хаягийн текст (цэсний товчнуудтай хамт)
+function sendLocation(senderId) {
+  return sendImage(senderId, LOCATION_IMAGE_URL).then(() =>
+    sendTextWithMenu(senderId, `Манай хаяг:\n📍 ${INFO.address}\n🌐 ${INFO.website}`)
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 4. SENDING HELPERS
+// ---------------------------------------------------------------------------
+const MENU_QUICK_REPLIES = [
+  { content_type: 'text', title: 'Цаг захиалах', payload: 'BOOK_APPT' },
+  { content_type: 'text', title: 'Ажиллах цаг', payload: 'GET_HOURS' },
+  { content_type: 'text', title: 'Хаяг, байршил', payload: 'GET_LOCATION' },
+  { content_type: 'text', title: 'Үйлчилгээ', payload: 'GET_SERVICES' },
+  { content_type: 'text', title: 'Үнийн мэдээлэл', payload: 'GET_PRICES' },
+  { content_type: 'text', title: 'Хүнтэй ярих', payload: 'TALK_HUMAN' },
+];
+
 function sendMainMenu(senderId) {
-  const payload = {
+  return callSendAPI({
     recipient: { id: senderId },
     message: {
       text: 'Сайн байна уу! Бадархундага Рашаан эмнэлэгт тавтай морил. Танд юугаар туслах вэ?',
-      quick_replies: [
-        { content_type: 'text', title: 'Цаг захиалах', payload: 'BOOK_APPT' },
-        { content_type: 'text', title: 'Ажиллах цаг', payload: 'GET_HOURS' },
-        { content_type: 'text', title: 'Хаяг, байршил', payload: 'GET_LOCATION' },
-        { content_type: 'text', title: 'Үйлчилгээ', payload: 'GET_SERVICES' },
-        { content_type: 'text', title: 'Үнийн мэдээлэл', payload: 'GET_PRICES' },
-        { content_type: 'text', title: 'Хүнтэй ярих', payload: 'TALK_HUMAN' },
-      ],
+      quick_replies: MENU_QUICK_REPLIES,
     },
-  };
-  return callSendAPI(payload);
+  });
 }
 
-function sendText(senderId, text, callback) {
-  const payload = {
+// Хариулт бүрд цэсний товчнууд дахин хавсарч очно
+function sendTextWithMenu(senderId, text) {
+  return callSendAPI({
+    recipient: { id: senderId },
+    message: { text, quick_replies: MENU_QUICK_REPLIES },
+  });
+}
+
+function sendText(senderId, text) {
+  return callSendAPI({
     recipient: { id: senderId },
     message: { text },
-  };
-  return callSendAPI(payload).then(() => {
-    if (callback) callback();
+  });
+}
+
+function sendImage(senderId, imageUrl) {
+  return callSendAPI({
+    recipient: { id: senderId },
+    message: {
+      attachment: {
+        type: 'image',
+        payload: { url: imageUrl, is_reusable: true },
+      },
+    },
   });
 }
 
 // ---------------------------------------------------------------------------
-// 4. SEND API WRAPPER
+// 5. SEND API WRAPPER
 // ---------------------------------------------------------------------------
 async function callSendAPI(payload) {
   try {
@@ -228,7 +280,7 @@ async function callSendAPI(payload) {
 }
 
 // ---------------------------------------------------------------------------
-// 5. PRIVACY POLICY PAGE
+// 6. PRIVACY POLICY PAGE
 // ---------------------------------------------------------------------------
 app.get('/privacy', (req, res) => {
   res.set('Content-Type', 'text/html');
