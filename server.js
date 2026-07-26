@@ -302,3 +302,10 @@ app.get('/privacy', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Bot server running on port ${PORT}`));
+// Өөрийгөө сэрүүн байлгах (Render free tier унтахаас сэргийлнэ)
+const SELF_URL = 'https://fb-messenger-bot-6gto.onrender.com/';
+setInterval(() => {
+  axios.get(SELF_URL)
+    .then(() => console.log('Self-ping OK'))
+    .catch((e) => console.log('Self-ping failed:', e.message));
+}, 10 * 60 * 1000);
