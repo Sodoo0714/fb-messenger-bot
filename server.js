@@ -18,7 +18,7 @@ const GRAPH_API_VERSION = 'v20.0';
 // ЭМНЭЛГИЙН МЭДЭЭЛЭЛ
 // ---------------------------------------------------------------------------
 const INFO = {
-  phone: '7035-08888, 9935-2335',
+  phone: '7035-0888, 9935-2335',
   hours: 'Даваа–Баасан: 24 цагаар',
   address:
     'Эрдэнэт хот, 11-р хороолол,\nхойд дугуй дэлгүүрийн баруун хойшоо\nшороон замаар өгсөх замд',
@@ -297,12 +297,12 @@ function sendLocation(senderId) {
 // 4. SENDING HELPERS
 // ---------------------------------------------------------------------------
 const MENU_QUICK_REPLIES = [
-  { content_type: 'text', title: 'Цаг захиалах', payload: 'BOOK_APPT' },
-  { content_type: 'text', title: 'Ажиллах цаг', payload: 'GET_HOURS' },
-  { content_type: 'text', title: 'Хаяг, байршил', payload: 'GET_LOCATION' },
-  { content_type: 'text', title: 'Үйлчилгээ', payload: 'GET_SERVICES' },
   { content_type: 'text', title: 'Үнийн мэдээлэл', payload: 'GET_PRICES' },
-  { content_type: 'text', title: 'Хүнтэй ярих', payload: 'TALK_HUMAN' },
+  { content_type: 'text', title: 'Хаяг, байршил', payload: 'GET_LOCATION' },
+  { content_type: 'text', title: 'Ажиллах цаг', payload: 'GET_HOURS' },
+  { content_type: 'text', title: 'Цаг захиалах', payload: 'BOOK_APPT' },
+  { content_type: 'text', title: 'Ажилтантай холбогдох', payload: 'TALK_HUMAN' },
+  { content_type: 'text', title: 'Үйлчилгээ', payload: 'GET_SERVICES' },
 ];
 
 function sendMainMenu(senderId) {
