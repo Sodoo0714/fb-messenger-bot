@@ -11,6 +11,7 @@ app.use(express.json());
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY; // Шинэ: Claude AI түлхүүр
 const GRAPH_API_VERSION = 'v20.0';
 
 // ---------------------------------------------------------------------------
@@ -41,8 +42,87 @@ const INFO = {
     '• Цусан дахь сахарын шинжилгээ',
 };
 
-// Байршлын зураг — badarhundaga-website repo-д bairshil.jpg нэрээр байршуулна
 const LOCATION_IMAGE_URL = 'https://badarhundaga.mn/bairshil.jpg';
+
+// ---------------------------------------------------------------------------
+// CLAUDE AI ТОХИРГОО
+// ---------------------------------------------------------------------------
+const CLAUDE_MODEL = 'claude-haiku-4-5';
+
+const SYSTEM_PROMPT = `Чи бол Эрдэнэт хотын "Бадархундага Рашаан" хувийн эмнэлгийн Facebook чатын туслах.
+
+ЭМНЭЛГИЙН МЭДЭЭЛЭЛ:
+- Утас: ${INFO.phone}
+- Ажиллах цаг: ${INFO.hours}
+- Хаяг: Эрдэнэт хот, 11-р хороолол, хойд дугуй дэлгүүрийн баруун хойшоо шороон замаар өгсөх замд
+- Вэбсайт: ${INFO.website}
+- Үйлчилгээнүүд:
+  * Хэвтэн эмчилгээ: дотрын эмчилгээ, уламжлалт эмчилгээ
+  * Өдрийн эмчилгээ: эмийн эмчилгээ, бариа засал
+  * Амбулаторийн үзлэг: дотрын эмчийн үзлэг, уламжлалт эмчилгээний үзлэг
+  * Лабораторийн шинжилгээ: цусны дэлгэрэнгүй, биохими, шээсний ерөнхий, В/С вирус, цусан дахь сахар
+
+ДҮРМҮҮД:
+1. Зөвхөн монголоор, кирилл үсгээр, эелдэг найрсаг хариул. Хэрэглэгч латин галигаар бичсэн ч ойлгож, кириллээр хариул.
+2. Товч бөгөөд тодорхой хариул — 2-4 өгүүлбэрт багтаа.
+3. ЗӨВХӨН дээрх мэдээлэлд тулгуурла. Жагсаалтад байхгүй үйлчилгээ (жишээ нь ЭХО, рентген, мэс засал г.м.) асуувал: "Энэ талаар лавлах утаснаас (${INFO.phone}) тодруулна уу" гэж чиглүүл. Байхгүй үйлчилгээг байгаа мэтээр бүү хэл.
+4. Онош тавихгүй, эмчилгээ зөвлөхгүй, эм бичихгүй. Өвчний шинж тэмдэг, эрүүл мэндийн зөвлөгөө асуувал: эмчид үзүүлэхийг зөвлөж, манай дотрын эмчийн үзлэгт ирэхийг эсвэл утсаар цаг захиалахыг санал болго.
+5. Үнийн талаар асуувал: үнийн мэдээллийг лавлах утаснаас авахыг зөвлө.
+6. Цаг захиалах хүсэлтэд: утсаар (${INFO.phone}) залгаж захиалахыг зөвлө.
+7. Эмнэлэгтэй огт хамааралгүй сэдвээр асуувал эелдгээр татгалзаж, эмнэлгийн асуудлаар туслахад бэлэн гэдгээ хэл.`;
+
+// Хэрэглэгч бүрийн сүүлийн харилцан яриаг богино хугацаанд санах (сервер unтарвал арилна)
+const chatHistory = new Map();
+const HISTORY_LIMIT = 6; // хэрэглэгч бүрд хадгалах мессежийн тоо
+const MAX_USERS = 500;
+
+function getHistory(senderId) {
+  return chatHistory.get(senderId) || [];
+}
+
+function pushHistory(senderId, role, content) {
+  const hist = chatHistory.get(senderId) || [];
+  hist.push({ role, content });
+  while (hist.length > HISTORY_LIMIT) hist.shift();
+  chatHistory.set(senderId, hist);
+  // Санах ойн хамгаалалт: хэт олон хэрэглэгч болбол хамгийн хуучныг устгана
+  if (chatHistory.size > MAX_USERS) {
+    const firstKey = chatHistory.keys().next().value;
+    chatHistory.delete(firstKey);
+  }
+}
+
+async function askClaude(senderId, userText) {
+  const messages = [...getHistory(senderId), { role: 'user', content: userText }];
+  const response = await axios.post(
+    'https://api.anthropic.com/v1/messages',
+    {
+      model: CLAUDE_MODEL,
+      max_tokens: 400,
+      system: SYSTEM_PROMPT,
+      messages,
+    },
+    {
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      timeout: 15000,
+    }
+  );
+  const parts = response.data.content || [];
+  const text = parts
+    .filter((p) => p.type === 'text')
+    .map((p) => p.text)
+    .join('\n')
+    .trim();
+  if (text) {
+    pushHistory(senderId, 'user', userText);
+    pushHistory(senderId, 'assistant', text);
+  }
+  return text;
+}
 
 // ---------------------------------------------------------------------------
 // 1. WEBHOOK VERIFICATION
@@ -109,6 +189,10 @@ app.post('/webhook', (req, res) => {
         );
       } else if (event.postback) {
         return handleQuickReply(senderId, event.postback.payload);
+      } else if (event.referral) {
+        // Зарын "Send message" товчоор шууд орж ирсэн хэрэглэгч
+        console.log('Ad referral received:', JSON.stringify(event.referral));
+        return sendMainMenu(senderId);
       }
     });
   });
@@ -117,64 +201,59 @@ app.post('/webhook', (req, res) => {
 // ---------------------------------------------------------------------------
 // 3. REPLY LOGIC
 // ---------------------------------------------------------------------------
-function handleMessage(senderId, text) {
+async function handleMessage(senderId, text) {
   const msg = text.trim().toLowerCase();
   const hasAny = (keywords) => keywords.some((k) => msg.includes(k));
 
-  if (hasAny(['сайн уу', 'сайн байна уу', 'hi', 'hello', 'menu', 'меню', 'start', 'эхлэх'])) {
+  // Энгийн мэндчилгээ — AI дуудалгүйгээр шууд цэс (хурдан, үнэгүй)
+  if (hasAny(['сайн уу', 'сайн байна уу', 'sain uu', 'sain baina uu', 'hi', 'hello', 'menu', 'меню', 'start', 'эхлэх'])) {
     return sendMainMenu(senderId);
   }
 
-  if (hasAny(['захиал', 'цаг ав', 'бүртгүүл', 'үзүүлье', 'үзүүлэх'])) {
+  // Зар сурталчилгаанаас орж ирсэн хэрэглэгчдийн түгээмэл хэллэгүүд
+  if (
+    hasAny([
+      'мэдээлэл',
+      'дэлгэрэнгүй',
+      'сонирхож',
+      'автомат хариулагч',
+      'medeelel',
+      'delgerengui',
+      'sonirhoj',
+      'дэлгэрэнгий',
+    ])
+  ) {
     return sendTextWithMenu(
       senderId,
-      `Цаг захиалахын тулд манай лавлах утас руу залгана уу:\n📞 ${INFO.phone}\n🕘 ${INFO.hours}`
+      `Сайн байна уу! Бадархундага Рашаан эмнэлэгт тавтай морил. 🏥\n\n🕘 ${INFO.hours}\n📞 ${INFO.phone}\n\nДоорх цэснээс сонирхсон мэдээллээ сонгоно уу:`
     );
   }
 
-  if (hasAny(['ажиллах цаг', 'хэдэн цаг', 'нээлттэй', 'хаагдах', 'ажилладаг', 'цагийн хуваарь'])) {
-    return sendTextWithMenu(senderId, `Манай ажиллах цаг:\n🕘 ${INFO.hours}`);
-  }
-
-  if (hasAny(['хаяг', 'байршил', 'хаана', 'очих', 'location', 'зам'])) {
+  // Байршил асуувал зурагтай хариулт (AI-аас илүү бүрэн)
+  if (hasAny(['хаяг', 'байршил', 'хаана байдаг', 'hayag', 'bairshil', 'haana baidag', 'location'])) {
     return sendLocation(senderId);
   }
 
-  if (hasAny(['үнэ', 'үнийн', 'төлбөр', 'хэд вэ', 'хэдээр', 'price'])) {
-    return sendTextWithMenu(
-      senderId,
-      `Үйлчилгээний үнийн дэлгэрэнгүй мэдээллийг лавлах утаснаас авна уу:\n📞 ${INFO.phone}\nЭсвэл ямар үйлчилгээ сонирхож байгаагаа бичээрэй.`
-    );
+  // Бусад бүх чөлөөт асуултыг Claude AI хариулна
+  if (ANTHROPIC_API_KEY) {
+    try {
+      await sendTypingOn(senderId);
+      const aiReply = await askClaude(senderId, text);
+      if (aiReply) {
+        return sendTextWithMenu(senderId, aiReply);
+      }
+    } catch (err) {
+      console.error(
+        'Claude API error:',
+        err.response ? JSON.stringify(err.response.data) : err.message
+      );
+    }
   }
 
-  if (hasAny(['утас', 'дугаар', 'залгах', 'холбогдох'])) {
-    return sendTextWithMenu(senderId, `Манай лавлах утас:\n📞 ${INFO.phone}`);
-  }
-
-  if (
-    hasAny([
-      'үйлчилгээ',
-      'эмчилгээ',
-      'тасаг',
-      'үзлэг',
-      'оношилгоо',
-      'шинжилгээ',
-      'бариа',
-      'лаборатори',
-      'хэвтэх',
-      'хэвтэн',
-    ])
-  ) {
-    return sendTextWithMenu(senderId, INFO.services);
-  }
-
-  if (hasAny(['баярлалаа', 'баярлаа', 'thanks', 'thank you', 'гоё'])) {
-    return sendTextWithMenu(senderId, 'Баярлалаа! Өөр асуух зүйл байвал бичээрэй. 😊');
-  }
-
+  // AI ажиллаагүй үеийн нөөц хариулт
   return sendTextWithMenu(
     senderId,
-    'Уучлаарай, таны асуултыг сайн ойлгосонгүй. Доорх сонголтуудаас сонгох эсвэл асуултаа өөрөөр бичээд үзээрэй.'
+    `Уучлаарай, яг одоо хариулж чадсангүй. Доорх сонголтуудаас сонгох эсвэл лавлах утсаар холбогдоно уу:\n📞 ${INFO.phone}`
   );
 }
 
@@ -208,7 +287,6 @@ function handleQuickReply(senderId, payload) {
   }
 }
 
-// Байршил: эхлээд зураг, дараа нь хаягийн текст (цэсний товчнуудтай хамт)
 function sendLocation(senderId) {
   return sendImage(senderId, LOCATION_IMAGE_URL).then(() =>
     sendTextWithMenu(senderId, `Манай хаяг:\n📍 ${INFO.address}\n🌐 ${INFO.website}`)
@@ -237,7 +315,6 @@ function sendMainMenu(senderId) {
   });
 }
 
-// Хариулт бүрд цэсний товчнууд дахин хавсарч очно
 function sendTextWithMenu(senderId, text) {
   return callSendAPI({
     recipient: { id: senderId },
@@ -261,6 +338,14 @@ function sendImage(senderId, imageUrl) {
         payload: { url: imageUrl, is_reusable: true },
       },
     },
+  });
+}
+
+// "Бичиж байна..." гэсэн indicator харуулах (AI бодох хооронд)
+function sendTypingOn(senderId) {
+  return callSendAPI({
+    recipient: { id: senderId },
+    sender_action: 'typing_on',
   });
 }
 
@@ -302,10 +387,3 @@ app.get('/privacy', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Bot server running on port ${PORT}`));
-// Өөрийгөө сэрүүн байлгах (Render free tier унтахаас сэргийлнэ)
-const SELF_URL = 'https://fb-messenger-bot-6gto.onrender.com/';
-setInterval(() => {
-  axios.get(SELF_URL)
-    .then(() => console.log('Self-ping OK'))
-    .catch((e) => console.log('Self-ping failed:', e.message));
-}, 10 * 60 * 1000);
