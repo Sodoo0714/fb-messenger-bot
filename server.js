@@ -234,7 +234,27 @@ async function handleMessage(senderId, text) {
   const hasAny = (keywords) => keywords.some((k) => msg.includes(k));
 
   // Энгийн мэндчилгээ — AI дуудалгүйгээр шууд цэс (хурдан, үнэгүй)
-  if (hasAny(['сайн уу', 'сайн байна уу', 'sain uu', 'sain baina uu', 'hi', 'hello', 'menu', 'меню', 'start', 'эхлэх'])) {
+  if (
+    hasAny([
+      'сайн уу',
+      'сайн байна уу',
+      'сайн',
+      'sain uu',
+      'sain baina uu',
+      'sain bn u',
+      'sain bna',
+      'sainu',
+      'sainuu',
+      'sain',
+      'hi',
+      'hello',
+      'hey',
+      'menu',
+      'меню',
+      'start',
+      'эхлэх',
+    ])
+  ) {
     return sendMainMenu(senderId);
   }
 
@@ -406,17 +426,11 @@ function handleNewComment(value) {
 
   console.log('Matched comment:', commentId, '-', value.message);
 
-  // 1) Комментод нийтийн хариу бичих
+  // Комментод нийтийн хариу бичих (private_replies нь Advanced Access шаарддаг тул
+  // одоогоор зөвхөн нийтийн хариулт ашиглана — энэ нь хэрэглэгчийг Messenger руу чиглүүлнэ,
+  // тэгээд манай ердийн messages webhook үргэлжлүүлж хариулна)
   callGraphAPI(`/${commentId}/comments`, {
-    message: 'Сайн байна уу! Танд Messenger-ээр хариу илгээлээ, чатаа шалгана уу. 😊',
-  });
-
-  // 2) Комментлогчид хувийн мессеж илгээх (private reply endpoint)
-  callGraphAPI(`/${commentId}/private_replies`, {
-    message:
-      `Сайн байна уу! Бадархундага Рашаан эмнэлгийн постонд сэтгэгдэл үлдээсэнд баярлалаа. 🏥\n\n` +
-      `📞 Лавлах: ${INFO.phone}\n🕘 ${INFO.hours}\n\n` +
-      `Асуух зүйлээ энд бичээрэй — бид танд туслахад бэлэн байна!`,
+    message: 'Сайн байна уу! Манай Messenger чатны автомат хариулагчаас дэлгэрэнгүй мэдээлэл аваарай. 😊',
   });
 }
 
