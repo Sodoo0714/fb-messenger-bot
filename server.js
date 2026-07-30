@@ -44,6 +44,25 @@ const INFO = {
 
 const LOCATION_IMAGE_URL = 'https://badarhundaga.mn/bairshil.jpg';
 
+// Коммент дотор эдгээр үгсийн аль нэг байвал автоматаар хариулна (жижиг үсгээр харьцуулна)
+const COMMENT_KEYWORDS = [
+  'үнэ', 'une', 'хэд', 'hed', 'цаг', 'tsag', 'хаяг', 'hayag',
+  'утас', 'utas', 'яаж', 'yaj', 'хэвт', 'hevt', 'болох', 'boloh',
+];
+
+// Сүүлд боловсруулсан коммент ID-г санаж давхардал шүүнэ
+const seenCommentIds = new Set();
+const seenCommentOrder = [];
+function isDuplicateComment(commentId) {
+  if (!commentId) return false;
+  if (seenCommentIds.has(commentId)) return true;
+  seenCommentIds.add(commentId);
+  seenCommentOrder.push(commentId);
+  if (seenCommentOrder.length > 300) seenCommentIds.delete(seenCommentOrder.shift());
+  return false;
+}
+
+
 // ---------------------------------------------------------------------------
 // CLAUDE AI ТОХИРГОО
 // ---------------------------------------------------------------------------
@@ -166,6 +185,15 @@ app.post('/webhook', (req, res) => {
   }
 
   body.entry.forEach((entry) => {
+    // Коммент event-үүд (feed field-ээр ирнэ)
+    const changes = entry.changes || [];
+    changes.forEach((change) => {
+      if (change.field !== 'feed') return;
+      const value = change.value || {};
+      if (value.item !== 'comment' || value.verb !== 'add') return;
+      handleNewComment(value);
+    });
+
     const events = entry.messaging || [];
     events.forEach((event) => {
       const senderId = event.sender && event.sender.id;
@@ -361,6 +389,47 @@ async function callSendAPI(payload) {
     );
   } catch (err) {
     console.error('Send API error:', err.response ? err.response.data : err.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 5b. COMMENT HANDLING (Facebook feed comments -> auto reply + private message)
+// ---------------------------------------------------------------------------
+function handleNewComment(value) {
+  const commentId = value.comment_id;
+  const text = (value.message || '').toLowerCase();
+
+  if (!commentId || isDuplicateComment(commentId)) return;
+
+  const matched = COMMENT_KEYWORDS.some((k) => text.includes(k));
+  if (!matched) return;
+
+  console.log('Matched comment:', commentId, '-', value.message);
+
+  // 1) Комментод нийтийн хариу бичих
+  callGraphAPI(`/${commentId}/comments`, {
+    message: 'Сайн байна уу! Танд Messenger-ээр хариу илгээлээ, чатаа шалгана уу. 😊',
+  });
+
+  // 2) Комментлогчид хувийн мессеж илгээх (private reply endpoint)
+  callGraphAPI(`/${commentId}/private_replies`, {
+    message:
+      `Сайн байна уу! Бадархундага Рашаан эмнэлгийн постонд сэтгэгдэл үлдээсэнд баярлалаа. 🏥\n\n` +
+      `📞 Лавлах: ${INFO.phone}\n🕘 ${INFO.hours}\n\n` +
+      `Асуух зүйлээ энд бичээрэй — бид танд туслахад бэлэн байна!`,
+  });
+}
+
+async function callGraphAPI(path, body) {
+  try {
+    await axios.post(`https://graph.facebook.com/${GRAPH_API_VERSION}${path}`, body, {
+      params: { access_token: PAGE_ACCESS_TOKEN },
+    });
+  } catch (err) {
+    console.error(
+      `Graph API error (${path}):`,
+      err.response ? JSON.stringify(err.response.data) : err.message
+    );
   }
 }
 
