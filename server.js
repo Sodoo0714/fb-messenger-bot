@@ -455,11 +455,19 @@ function handleNewComment(value) {
 
   console.log('Matched comment:', commentId, '-', value.message);
 
-  // Комментод нийтийн хариу бичих (private_replies нь Advanced Access шаарддаг тул
+  // Komментод нийтийн хариу бичих (private_replies нь Advanced Access шаарддаг тул
   // одоогоор зөвхөн нийтийн хариулт ашиглана — энэ нь хэрэглэгчийг Messenger руу чиглүүлнэ,
-  // тэгээд манай ердийн messages webhook үргэлжлүүлж хариулна)
+  // тэгээд манай ердийн messages webhook үргэлжлүүлж хариулна).
+  //
+  // ЗАСВАР: Хариултыг хэрэглэгчийн нэрээр эхлүүлж, коммент бүрт өвөрмөц болгосон.
+  // Ижил загварын (template) текстийг олон коммент дээр давтан бичих нь Meta-гийн
+  // спам/автомат илрүүлэлтэд өртөж, notification-г нь дарах магадлалтай тул үүнийг
+  // бууруулах зорилготой.
+  const commenterName = value.from && value.from.name ? value.from.name : '';
+  const greeting = commenterName ? `${commenterName} ` : '';
+
   callGraphAPI(`/${commentId}/comments`, {
-    message: 'Сайн байна уу! Манай чатны автомат хариулагчаас дэлгэрэнгүй мэдээлэл аваарай 😊',
+    message: `${greeting}Сайн байна уу! Манай чатны автомат хариулагчаас дэлгэрэнгүй мэдээлэл аваарай 😊`,
   });
 }
 
