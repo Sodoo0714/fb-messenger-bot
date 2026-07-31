@@ -459,15 +459,20 @@ function handleNewComment(value) {
   // одоогоор зөвхөн нийтийн хариулт ашиглана — энэ нь хэрэглэгчийг Messenger руу чиглүүлнэ,
   // тэгээд манай ердийн messages webhook үргэлжлүүлж хариулна).
   //
-  // ЗАСВАР: Хариултыг хэрэглэгчийн нэрээр эхлүүлж, коммент бүрт өвөрмөц болгосон.
-  // Ижил загварын (template) текстийг олон коммент дээр давтан бичих нь Meta-гийн
-  // спам/автомат илрүүлэлтэд өртөж, notification-г нь дарах магадлалтай тул үүнийг
-  // бууруулах зорилготой.
+  // ЗАСВАР v2: Зүгээр нэрийг текст болгон бичих нь бодит "tag" болохгүй тул notification
+  // явуулдаггүй нь тогтоогдсон (зөвхөн profile-руу шилждэг цэнхэр mention л notify хийдэг).
+  // Иймд Facebook-ийн "@[user-id]" mention синтаксыг ашиглаж, коммент бичигчийн PSID/ID-г
+  // шууд tag болгож оруулна. Хэрэв ID байхгүй бол хуучин нэр-текст хувилбар руу буцна.
+  const commenterId = value.from && value.from.id ? value.from.id : null;
   const commenterName = value.from && value.from.name ? value.from.name : '';
-  const greeting = commenterName ? `${commenterName} ` : '';
+  const mentionOrName = commenterId
+    ? `@[${commenterId}] `
+    : commenterName
+    ? `${commenterName} `
+    : '';
 
   callGraphAPI(`/${commentId}/comments`, {
-    message: `${greeting}Сайн байна уу! Манай чатны автомат хариулагчаас дэлгэрэнгүй мэдээлэл аваарай 😊`,
+    message: `${mentionOrName}Сайн байна уу! Манай чатны автомат хариулагчаас дэлгэрэнгүй мэдээлэл аваарай 😊`,
   });
 }
 
