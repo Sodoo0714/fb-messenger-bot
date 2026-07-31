@@ -474,6 +474,19 @@ function handleNewComment(value) {
   callGraphAPI(`/${commentId}/comments`, {
     message: `${mentionOrName}Сайн байна уу! Манай чатны автомат хариулагчаас дэлгэрэнгүй мэдээлэл аваарай 😊`,
   });
+
+  // Коммент дээр Like дарах (ManyChat-ийн хийдэг байсан зан төлөв).
+  // pages_manage_engagement эрхтэй бол шууд ажиллана — нэмэлт App Review шаардахгүй.
+  callGraphAPI(`/${commentId}/likes`, {});
+
+  // Хэрэглэгчийн Messenger рүү шууд private reply илгээх (ManyChat-д байсан "chat руу бичих" функц).
+  // ЭНЭ НЬ pages_messaging permission-ий Advanced Access шаарддаг. Одоогоор App Review
+  // дуусаагүй тул permission error өгч болзошгүй — Render лог дотор
+  // "Graph API error (/{commentId}/private_replies): ..." гэж харагдвал яг энэ шалтгаан.
+  // App Review batlagdsanii daraa энэ мөр нэмэлт өөрчлөлтгүйгээр ажиллаж эхэлнэ.
+  callGraphAPI(`/${commentId}/private_replies`, {
+    message: `Сайн байна уу! Бадархундага Рашаан эмнэлэгт тавтай морил. 🏥\n\n🕘 ${INFO.hours}\n📞 ${INFO.phone}\n\nДоорх цэснээс сонирхсон мэдээллээ сонгоно уу:`,
+  });
 }
 
 async function callGraphAPI(path, body) {
