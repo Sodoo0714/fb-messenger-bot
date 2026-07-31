@@ -43,6 +43,7 @@ const INFO = {
 };
 
 const LOCATION_IMAGE_URL = 'https://badarhundaga.mn/bairshil.jpg';
+const PAGE_ID = '221185958767806'; // Бадархундага Рашаан эмнэлгийн Page ID — өөрийн коммент давталтаас сэргийлнэ
 
 // Коммент дотор эдгээр үгсийн аль нэг байвал автоматаар хариулна (жижиг үсгээр харьцуулна)
 const COMMENT_KEYWORDS = [
@@ -441,6 +442,13 @@ function handleNewComment(value) {
   const text = (value.message || '').toLowerCase();
 
   if (!commentId || isDuplicateComment(commentId)) return;
+
+  // МААШ ЧУХАЛ: Page-ийн ӨӨРИЙН комментыг (манай ботын хариу оролцуулаад) огт бүү боловсрол.
+  // Үгүй бол бот өөрийн хариу коммент дээрээ дахин үйлдэл хийж хязгааргүй давталтад орно.
+  if (value.from && value.from.id === PAGE_ID) {
+    console.log('Ignored: comment from our own Page, id =', commentId);
+    return;
+  }
 
   const matched = COMMENT_KEYWORDS.some((k) => text.includes(k));
   if (!matched) return;
