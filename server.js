@@ -255,8 +255,17 @@ async function handleMessage(senderId, text) {
   const msg = text.trim().toLowerCase();
   const hasAny = (keywords) => keywords.some((k) => msg.includes(k));
 
-  // Энгийн мэндчилгээ — AI дуудалгүйгээр шууд цэс (хурдан, үнэгүй)
+  // Мессежийн үгийн тоо (богино мэндчилгээ эсэхийг ялгахад ашиглана)
+  const wordCount = msg.split(/\s+/).filter(Boolean).length;
+
+  // Энгийн мэндчилгээ — AI дуудалгүйгээр шууд цэс (хурдан, үнэгүй).
+  // ЗАСВАР: Хуучин код "сайн" гэдэг үг агуулагдсан эсэхийг л шалгадаг байсан тул,
+  // "Сайн бна уу, элэгний өвчтэй хүн эмчилдэг үү?" мэтийн БОДИТ асуулт ч мэндчилгээ
+  // гэж таарч, Claude AI-руу огт хүрэлгүй ерөнхий цэс рүү буруу чиглэдэг байлаа.
+  // Одоо ЗӨВХӨН мессеж богино (4 үгээс цөөн) үед л мэндчилгээ гэж үзнэ; урт/бодит
+  // асуулт бол доош Claude AI-руу дамжина.
   if (
+    wordCount <= 4 &&
     hasAny([
       'сайн уу',
       'сайн байна уу',
@@ -501,6 +510,66 @@ async function callGraphAPI(path, body) {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// 5c. MESSENGER PROFILE SETUP (Get Started товч + persistent menu)
+// ---------------------------------------------------------------------------
+// Graph API Explorer дээр permission асуудалтай тул, серверийн өөрийн
+// PAGE_ACCESS_TOKEN-оор шууд тохируулна. Браузераасаа нэг удаа дуудахад хангалттай:
+//   https://<таны-render-хаяг>/setup-profile
+// Шалгахдаа:
+//   https://<таны-render-хаяг>/check-profile
+
+app.get('/check-profile', async (req, res) => {
+  try {
+    const r = await axios.get(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messenger_profile`,
+      {
+        params: {
+          fields: 'get_started,persistent_menu,greeting',
+          access_token: PAGE_ACCESS_TOKEN,
+        },
+      }
+    );
+    res.json(r.data);
+  } catch (err) {
+    res.status(500).json(err.response ? err.response.data : { error: err.message });
+  }
+});
+
+app.get('/setup-profile', async (req, res) => {
+  try {
+    const r = await axios.post(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messenger_profile`,
+      {
+        get_started: { payload: 'GET_STARTED' },
+        greeting: [
+          {
+            locale: 'default',
+            text:
+              'Сайн байна уу! Бадархундага Рашаан эмнэлэгт тавтай морил. 🏥\n' +
+              'Доорх "Эхлэх" товчийг дарж мэдээлэл аваарай.',
+          },
+        ],
+        persistent_menu: [
+          {
+            locale: 'default',
+            composer_input_disabled: false,
+            call_to_actions: [
+              { type: 'postback', title: 'Үндсэн цэс', payload: 'GET_STARTED' },
+              { type: 'postback', title: 'Хаяг, байршил', payload: 'GET_LOCATION' },
+              { type: 'postback', title: 'Цаг захиалах', payload: 'BOOK_APPT' },
+            ],
+          },
+        ],
+      },
+      { params: { access_token: PAGE_ACCESS_TOKEN } }
+    );
+    res.json({ ok: true, result: r.data });
+  } catch (err) {
+    res.status(500).json(err.response ? err.response.data : { error: err.message });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // 6. PRIVACY POLICY PAGE
