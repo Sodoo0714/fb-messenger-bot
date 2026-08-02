@@ -526,7 +526,7 @@ app.get('/check-profile', async (req, res) => {
       `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messenger_profile`,
       {
         params: {
-          fields: 'get_started,persistent_menu,greeting',
+          fields: 'get_started,persistent_menu,ice_breakers',
           access_token: PAGE_ACCESS_TOKEN,
         },
       }
@@ -564,11 +564,16 @@ app.get('/setup-profile', async (req, res) => {
   );
 
   results.push(
-    await setProfileField('greeting', {
-      greeting: [
+    await setProfileField('ice_breakers', {
+      ice_breakers: [
         {
           locale: 'default',
-          text: 'Сайн байна уу! Бадархундага Рашаан эмнэлэгт тавтай морил.',
+          call_to_actions: [
+            { question: 'Ямар үйлчилгээ үзүүлдэг вэ?', payload: 'GET_SERVICES' },
+            { question: 'Хаана байрладаг вэ?', payload: 'GET_LOCATION' },
+            { question: 'Ажиллах цаг хэд вэ?', payload: 'GET_HOURS' },
+            { question: 'Цаг захиалмаар байна', payload: 'BOOK_APPT' },
+          ],
         },
       ],
     })
