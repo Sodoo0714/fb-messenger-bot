@@ -537,38 +537,60 @@ app.get('/check-profile', async (req, res) => {
   }
 });
 
-app.get('/setup-profile', async (req, res) => {
+// Талбар бүрийг ТУСДАА илгээнэ. Нэг дуудалтаар илгээхэд Facebook нэгийг нь чимээгүй
+// хаячихаад ерөнхийдөө "success" буцаадаг тул аль нь унасныг харах боломжгүй байсан.
+async function setProfileField(name, body) {
   try {
     const r = await axios.post(
       `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messenger_profile`,
-      {
-        get_started: { payload: 'GET_STARTED' },
-        greeting: [
-          {
-            locale: 'default',
-            text:
-              'Сайн байна уу! Бадархундага Рашаан эмнэлэгт тавтай морил. 🏥\n' +
-              'Доорх "Эхлэх" товчийг дарж мэдээлэл аваарай.',
-          },
-        ],
-        persistent_menu: [
-          {
-            locale: 'default',
-            composer_input_disabled: false,
-            call_to_actions: [
-              { type: 'postback', title: 'Үндсэн цэс', payload: 'GET_STARTED' },
-              { type: 'postback', title: 'Хаяг, байршил', payload: 'GET_LOCATION' },
-              { type: 'postback', title: 'Цаг захиалах', payload: 'BOOK_APPT' },
-            ],
-          },
-        ],
-      },
+      body,
       { params: { access_token: PAGE_ACCESS_TOKEN } }
     );
-    res.json({ ok: true, result: r.data });
+    return { field: name, ok: true, result: r.data };
   } catch (err) {
-    res.status(500).json(err.response ? err.response.data : { error: err.message });
+    return {
+      field: name,
+      ok: false,
+      error: err.response ? err.response.data : err.message,
+    };
   }
+}
+
+app.get('/setup-profile', async (req, res) => {
+  const results = [];
+
+  results.push(
+    await setProfileField('get_started', { get_started: { payload: 'GET_STARTED' } })
+  );
+
+  results.push(
+    await setProfileField('greeting', {
+      greeting: [
+        {
+          locale: 'default',
+          text: 'Сайн байна уу! Бадархундага Рашаан эмнэлэгт тавтай морил.',
+        },
+      ],
+    })
+  );
+
+  results.push(
+    await setProfileField('persistent_menu', {
+      persistent_menu: [
+        {
+          locale: 'default',
+          composer_input_disabled: false,
+          call_to_actions: [
+            { type: 'postback', title: 'Үндсэн цэс', payload: 'GET_STARTED' },
+            { type: 'postback', title: 'Хаяг, байршил', payload: 'GET_LOCATION' },
+            { type: 'postback', title: 'Цаг захиалах', payload: 'BOOK_APPT' },
+          ],
+        },
+      ],
+    })
+  );
+
+  res.json({ results });
 });
 
 // ---------------------------------------------------------------------------
