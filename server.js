@@ -383,10 +383,8 @@ function handleQuickReply(senderId, payload) {
     case 'GET_LOCATION':
       return sendLocation(senderId);
     case 'GET_PRICES':
-      return sendTextWithMenu(
-        senderId,
-        `Үйлчилгээний үнийн дэлгэрэнгүй мэдээллийг лавлах утаснаас авна уу:\n📞 ${INFO.phone}\nЭсвэл ямар үйлчилгээ сонирхож байгаагаа бичээрэй.`
-      );
+      // Хуучин цэсний товч. Одоо шууд өрөөний үнэ рүү чиглүүлнэ.
+      return sendTextWithMenu(senderId, INFO.rooms);
     case 'GET_ROOMS':
       return sendTextWithMenu(senderId, INFO.rooms);
     case 'GET_SERVICES':
@@ -414,7 +412,6 @@ function sendLocation(senderId) {
 // ---------------------------------------------------------------------------
 const MENU_QUICK_REPLIES = [
   { content_type: 'text', title: 'Өрөөний үнэ', payload: 'GET_ROOMS' },
-  { content_type: 'text', title: 'Үнийн мэдээлэл', payload: 'GET_PRICES' },
   { content_type: 'text', title: 'Хаяг, байршил', payload: 'GET_LOCATION' },
   { content_type: 'text', title: 'Ажиллах цаг', payload: 'GET_HOURS' },
   { content_type: 'text', title: 'Цаг захиалах', payload: 'BOOK_APPT' },
