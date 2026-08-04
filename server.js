@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const nodemailer = require('nodemailer');
 
 const app = express();
 app.use((req, res, next) => {
@@ -464,73 +463,12 @@ function sendTypingOn(senderId) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// 4b. И-МЭЙЛ МЭДЭГДЭЛ (ажилтантай холбогдох хүсэлт ирэхэд)
-// ---------------------------------------------------------------------------
-// Render дээр дараах орчны хувьсагчдыг тохируулна:
-//   SMTP_USER  = info@badarhundaga.mn
-//   SMTP_PASS  = Zoho-гийн app-specific password (энгийн нууц үг биш)
-//   ALERT_TO   = sodbileg.g07@gmail.com
-//   SMTP_HOST  = smtp.zoho.com  (заавал биш, өгөөгүй бол энэ утга авна)
-const SMTP_HOST = process.env.SMTP_HOST || 'smtp.zoho.com';
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
-const ALERT_TO = process.env.ALERT_TO;
-
-const mailer =
-  SMTP_USER && SMTP_PASS
-    ? nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: 465,
-        secure: true,
-        auth: { user: SMTP_USER, pass: SMTP_PASS },
-      })
-    : null;
-
-async function sendAlertEmail(subject, text) {
-  if (!mailer || !ALERT_TO) {
-    console.log('Email skipped: SMTP тохиргоо дутуу байна.');
-    return;
-  }
-  try {
-    await mailer.sendMail({
-      from: `"Бадархундага бот" <${SMTP_USER}>`,
-      to: ALERT_TO,
-      subject,
-      text,
-    });
-    console.log('Alert email sent:', subject);
-  } catch (err) {
-    console.error('Email error:', err.message);
-  }
-}
-
-// Хэрэглэгчийн нэрийг Graph API-аас авах (боломжгүй бол хоосон буцаана)
-async function getUserName(senderId) {
-  try {
-    const r = await axios.get(`https://graph.facebook.com/${GRAPH_API_VERSION}/${senderId}`, {
-      params: { fields: 'first_name,last_name', access_token: PAGE_ACCESS_TOKEN },
-    });
-    return [r.data.first_name, r.data.last_name].filter(Boolean).join(' ');
-  } catch (err) {
-    return '';
-  }
-}
-
-// Ажилтантай холбогдох хүсэлтийг и-мэйлээр мэдэгдэх
+// Ажилтантай холбогдох хүсэлтийг лог руу бичих.
+// (И-мэйл мэдэгдэл хийхгүй болсон тул зөвхөн Render-ийн лог дээр үлдээнэ.
+//  Мэдэгдэл авахыг хүсвэл Meta Business Suite апп дээрээ notification асаана уу.)
 async function notifyHumanRequest(senderId) {
-  const name = await getUserName(senderId);
   const when = new Date().toLocaleString('mn-MN', { timeZone: 'Asia/Ulaanbaatar' });
-  const inboxUrl = `https://business.facebook.com/latest/inbox/all?asset_id=${PAGE_ID}`;
-
-  await sendAlertEmail(
-    `🔔 Ажилтантай холбогдох хүсэлт${name ? ' — ' + name : ''}`,
-    `Facebook Messenger дээр хэрэглэгч "Ажилтантай холбогдох" товчийг дарлаа.\n\n` +
-      `Хэрэглэгч: ${name || '(нэр тодорхойгүй)'}\n` +
-      `PSID: ${senderId}\n` +
-      `Цаг: ${when}\n\n` +
-      `Хариулах: ${inboxUrl}\n`
-  );
+  console.log(`Ажилтантай холбогдох хүсэлт — PSID: ${senderId}, цаг: ${when}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -720,30 +658,6 @@ app.get('/test-ai', async (req, res) => {
       status: err.response ? err.response.status : null,
       error: err.response ? err.response.data : err.message,
     });
-  }
-});
-
-// И-мэйл тохиргоог шалгах: /test-email
-app.get('/test-email', async (req, res) => {
-  if (!mailer || !ALERT_TO) {
-    return res.json({
-      ok: false,
-      reason: 'SMTP_USER, SMTP_PASS эсвэл ALERT_TO орчны хувьсагч дутуу байна.',
-      smtp_user_set: !!SMTP_USER,
-      smtp_pass_set: !!SMTP_PASS,
-      alert_to_set: !!ALERT_TO,
-    });
-  }
-  try {
-    await mailer.sendMail({
-      from: `"Бадархундага бот" <${SMTP_USER}>`,
-      to: ALERT_TO,
-      subject: '✅ Туршилтын мэдэгдэл',
-      text: 'Энэ бол туршилтын захидал. И-мэйл мэдэгдэл зөв ажиллаж байна.',
-    });
-    res.json({ ok: true, sentTo: ALERT_TO });
-  } catch (err) {
-    res.json({ ok: false, error: err.message });
   }
 });
 
