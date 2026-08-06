@@ -62,6 +62,11 @@ const INFO = {
 const LOCATION_IMAGE_URL = 'https://badarhundaga.mn/bairshil.jpg';
 const PAGE_ID = '221185958767806'; // Бадархундага Рашаан эмнэлгийн Page ID — өөрийн коммент давталтаас сэргийлнэ
 
+// "Ажилтантай холбогдох" дарсны дараа илгээх дагалдах мессежийн тохиргоо.
+// Ажилтны нэрийг солихдоо зөвхөн энэ мөрийг засна.
+const STAFF_NAME = 'Батбилэг';
+const STAFF_FOLLOWUP_DELAY_MS = 2 * 60 * 1000; // 2 минут
+
 // Коммент дотор эдгээр үгсийн аль нэг байвал автоматаар хариулна (жижиг үсгээр харьцуулна)
 const COMMENT_KEYWORDS = [
   // Үнэ, төлбөр
@@ -439,9 +444,16 @@ function handleQuickReply(senderId, payload) {
       // хэрэглэгчийн хуучин чат дотор үлдсэн байж болзошгүй тул энд хамт барина.
       return sendTextWithMenu(senderId, `${INFO.services}\n\n${INFO.rooms}`);
     case 'TALK_HUMAN':
-      // Ажилтанд и-мэйлээр мэдэгдэнэ (хэрэглэгчийн хариултыг хойшлуулахгүй,
-      // тиймээс await хийхгүй — цаана нь ажиллана)
+      // Ажилтанд мэдэгдэнэ (Render-ийн лог руу)
       notifyHumanRequest(senderId);
+      // 2 минутын дараа дагалдах мессеж илгээнэ
+      setTimeout(() => {
+        sendTextWithMenu(
+          senderId,
+          `Сайн байна уу! Ажилтан ${STAFF_NAME} тантай холбогдож байна.\n` +
+            `Асуух зүйлээ энд үлдээгээрэй, удахгүй хариулах болно.`
+        );
+      }, STAFF_FOLLOWUP_DELAY_MS);
       return sendTextWithMenu(
         senderId,
         `Манай ажилтан тантай удахгүй холбогдох болно. Яаралтай бол утсаар холбогдоорой:\n📞 ${INFO.phone}\nХүлээцтэй хандсанд баярлалаа!`
