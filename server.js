@@ -337,6 +337,16 @@ async function handleMessage(senderId, text) {
     );
   }
 
+  // Хуучин (ManyChat үеийн) цэсний товчнууд зарим хэрэглэгчийн чат дотор кэшлэгдсэн
+  // хэвээр байгаа бөгөөд танихгүй payload илгээдэг. Тиймээс товчны ТЕКСТЭЭР нь таьж,
+  // зөв хариулт руу чиглүүлнэ.
+  if (hasAny(['ажилтантай холбогдох', 'ажилтантай', 'оператор', 'жинхэнэ хүн'])) {
+    return handleQuickReply(senderId, 'TALK_HUMAN');
+  }
+  if (hasAny(['хэвтэн эмчилгээ', 'үйлчилгээ', 'уйлчилгээ'])) {
+    return handleQuickReply(senderId, 'GET_SERVICES');
+  }
+
   // Даатгалын асуулт — маш түгээмэл тул шууд тодорхой хариулна
   if (
     hasAny([
@@ -461,6 +471,9 @@ function handleQuickReply(senderId, payload) {
     case 'GET_STARTED':
       return sendMainMenu(senderId);
     default:
+      // Танихгүй payload (ихэвчлэн хуучин ManyChat-ийн ACT::... товчнууд).
+      // Ямар payload ирснийг лог руу бичиж, дараа нь тохируулах боломжтой болгоно.
+      console.log('Unknown payload received:', payload);
       return sendMainMenu(senderId);
   }
 }
