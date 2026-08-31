@@ -1,0 +1,23 @@
+name: Keep Render awake
+
+# Render-ийн үнэгүй багц 15 минут ачаалалгүй бол серверийг унтраадаг.
+# Унтрахад хүлээгдэж буй бүх setTimeout (1 цагийн сануулга, 2 минутын
+# ажилтны мессеж) устдаг тул 5 минут тутам ping илгээж сэрүүн байлгана.
+on:
+  schedule:
+    # 5 минут тутам. GitHub заримдаа хуваарийг хойшлуулдаг тул 10 биш 5 минут
+    # сонгосон — хойшлогдсон ч 15 минутын хязгаарт багтана.
+    - cron: '*/5 * * * *'
+  # Гараар ажиллуулах боломж (Actions таб дээрээс "Run workflow")
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping bot server
+        run: |
+          echo "Pinging at $(date -u)"
+          curl --fail --silent --show-error --max-time 30 \
+            https://fb-messenger-bot-6gto.onrender.com/ \
+            && echo "OK"
