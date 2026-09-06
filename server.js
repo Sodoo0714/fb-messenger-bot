@@ -109,8 +109,7 @@ function scheduleReengage(senderId) {
 }
 
 // Ерөнхий сануулгыг илгээхгүй байхаар цуцлах туслах функц.
-// (Одоогоор хаанаас ч дуудагдахгүй — ирээдүйд ямар нэг товч дээр сануулгыг
-//  болиулах шаардлага гарвал энд дуудна.)
+// "Ажилтантай холбогдох" дарсан үед дуудагдана.
 function cancelReengage(senderId) {
   const existing = reengageTimers.get(senderId);
   if (existing) {
@@ -349,6 +348,21 @@ async function handleMessage(senderId, text) {
   const msg = text.trim().toLowerCase();
   const hasAny = (keywords) => keywords.some((k) => msg.includes(k));
 
+  // ЗАСВАР: hasAny нь үг дундаас ч олдвол таарна. Монгол хэлэнд энэ нь ноцтой
+  // алдаа үүсгэдэг: "тЭМДэг" дотор "эмд", "ЗҮҮн" дотор "зүү" таарч, огт өөр
+  // хариулт явдаг байлаа. Тиймээс доорх хоёр туслах функцийг ашиглана.
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // hasStem: үгийн ЭХЛЭЛээс таарна, залгавар зөвшөөрнө.
+  // "даатгал" → "даатгалаар", "даатгалтай" таарна; "тэмдэг" дотроос таарахгүй.
+  const hasStem = (stems) =>
+    stems.some((k) => new RegExp(`(?<!\\p{L})${escapeRe(k)}`, 'u').test(msg));
+
+  // hasExact: бүтэн үг байх ёстой (залгаваргүй).
+  // "зүү" таарна, "зүүн" таарахгүй; "мэнд" таарна, "мэндийн" таарахгүй.
+  const hasExact = (words) =>
+    words.some((k) => new RegExp(`(?<!\\p{L})${escapeRe(k)}(?!\\p{L})`, 'u').test(msg));
+
   // Мессежийн үгийн тоо (богино мэндчилгээ эсэхийг ялгахад ашиглана)
   const wordCount = msg.split(/\s+/).filter(Boolean).length;
 
@@ -360,11 +374,10 @@ async function handleMessage(senderId, text) {
   // асуулт бол доош Claude AI-руу дамжина.
   if (
     wordCount <= 4 &&
-    hasAny([
+    (hasAny([
       'сайн уу',
       'сайн байна уу',
       'сайн',
-      'мэнд',
       'sain uu',
       'sain baina uu',
       'sain bn u',
@@ -380,7 +393,8 @@ async function handleMessage(senderId, text) {
       'меню',
       'start',
       'эхлэх',
-    ])
+    ]) ||
+      hasExact(['мэнд', 'ө.мэнд', 'о.мэнд']))
   ) {
     return sendMainMenu(senderId);
   }
@@ -410,28 +424,16 @@ async function handleMessage(senderId, text) {
   if (hasAny(['ажилтантай холбогдох', 'ажилтантай', 'оператор', 'жинхэнэ хүн'])) {
     return handleQuickReply(senderId, 'TALK_HUMAN');
   }
-  if (hasAny(['хэвтэн эмчилгээ', 'үйлчилгээ', 'уйлчилгээ'])) {
-    return handleQuickReply(senderId, 'GET_SERVICES');
-  }
 
   // Даатгалын асуулт — маш түгээмэл тул шууд тодорхой хариулна
   if (
-    hasAny([
-      'даатгал',
-      'даатгалаар',
-      'даатгалтай',
-      'daatgal',
-      'daatgalaar',
-      'даадгал',
-      'эмд',
-      'эрүүл мэндийн даатгал',
-    ])
+    hasStem(['даатгал', 'даадгал', 'daatgal']) || hasExact(['эмд'])
   ) {
     return sendTextWithMenu(senderId, INFO.insurance);
   }
 
   // Харьяалал — өрхийн эмнэлгийн харьяалал шаардлагатай эсэх нь түгээмэл асуулт
-  if (hasAny(['харьяалал', 'харъяалал', 'харьяа', 'харъяа', 'haryaalal', 'harjaalal', 'haryaa'])) {
+  if (hasStem(['харьяа', 'харъяа', 'haryaa', 'harjaa'])) {
     return sendTextWithMenu(
       senderId,
       'Манай эмнэлэгт үйлчлүүлэхэд харьяалал хамаарахгүй.\n' +
@@ -443,15 +445,8 @@ async function handleMessage(senderId, text) {
 
   // "Хамрагдаж болох уу", "үйлчлүүлж болох уу" — эрх, нөхцөлийн асуулт
   if (
-    hasAny([
-      'хамрагдаж',
-      'хамрагдах',
-      'хамрагдан',
-      'үйлчлүүлж болох',
-      'эмчлүүлж болох',
-      'hamragdaj',
-      'hamragdah',
-    ])
+    hasStem(['хамрагд', 'hamragd']) ||
+    hasAny(['үйлчлүүлж болох', 'эмчлүүлж болох'])
   ) {
     return sendTextWithMenu(
       senderId,
@@ -464,7 +459,10 @@ async function handleMessage(senderId, text) {
 
   // Зүү, төөнүүр — хийдэггүй үйлчилгээ. AI-д найдвал буруу/бүрхэг хариулт өгөх
   // эрсдэлтэй тул энд шууд тодорхой хариулна.
-  if (hasAny(['зүү', 'төөнүүр', 'тоонуур', 'töönüür', 'zuu ', 'zuu?', 'toonuur', 'tuunuur'])) {
+  if (
+    hasExact(['зүү', 'зүүгээр', 'зүүний', 'зүүтэй']) ||
+    hasStem(['төөнүүр', 'тоонуур', 'toonuur', 'tuunuur'])
+  ) {
     return sendTextWithMenu(
       senderId,
       'Манай эмнэлэг зүү, төөнүүр эмчилгээ хийдэггүй.\n' +
@@ -477,7 +475,7 @@ async function handleMessage(senderId, text) {
   }
 
   // Бариа засал — ямар төрлийн бариа хийдэг вэ гэсэн асуултад
-  if (hasAny(['бариа', 'засал', 'baria', 'zasal', 'массаж', 'massaj'])) {
+  if (hasStem(['бариа', 'засал', 'baria', 'zasal', 'массаж', 'massaj'])) {
     return sendTextWithMenu(
       senderId,
       'Манай эмнэлэг бариа заслын дараах төрлүүдийг хийдэг:\n' +
@@ -557,6 +555,14 @@ async function handleMessage(senderId, text) {
     return sendLocation(senderId);
   }
 
+  // Үйлчилгээний ерөнхий асуулт — ЭНЭ ШАЛГАЛТ ХАМГИЙН СҮҮЛД байх ёстой.
+  // "үйлчилгээ" гэдэг үг маш өргөн тул дээрх тодорхой шалгалтуудаас (даатгал,
+  // харьяалал, зүү, бариа, ArdPay, цаг, өрөө, хаяг) ӨМНӨ байвал тэдгээрийг
+  // дарж, "Үйлчилгээнд даатгал хамаарах уу?" мэтийн асуултад буруу хариулдаг.
+  if (hasStem(['үйлчилгээ', 'уйлчилгээ']) || hasAny(['хэвтэн эмчилгээ'])) {
+    return handleQuickReply(senderId, 'GET_SERVICES');
+  }
+
   // Бусад бүх чөлөөт асуултыг Claude AI хариулна
   if (ANTHROPIC_API_KEY) {
     try {
@@ -600,6 +606,8 @@ function handleQuickReply(senderId, payload) {
       // хэрэглэгчийн хуучин чат дотор үлдсэн байж болзошгүй тул энд хамт барина.
       return sendTextWithMenu(senderId, `${INFO.services}\n\n${INFO.rooms}`);
     case 'TALK_HUMAN':
+      // Ажилтан хариулах тул ерөнхий 1 цагийн сануулгыг цуцална (давхардуулахгүй)
+      cancelReengage(senderId);
       // Ажилтанд мэдэгдэнэ (Render-ийн лог руу)
       notifyHumanRequest(senderId);
       // 2 минутын дараа дагалдах мессеж илгээнэ
@@ -891,6 +899,29 @@ app.get('/setup-profile', async (req, res) => {
 });
 
 // Claude AI холболтыг шалгах оношилгооны хаяг: /test-ai
+// Ice Breakers-ийг устгах: /remove-icebreakers
+// ЯАГААД: Meta-гийн эрэмбээр API-аар тохируулсан ice_breakers нь Get Started
+// товчийг ДАРНА. Хэрэв Get Started товчийг харуулахыг хүсвэл ice_breakers-ийг
+// устгана. Дараа нь буцааж сэргээхийг хүсвэл /setup-profile дуудна.
+app.get('/remove-icebreakers', async (req, res) => {
+  try {
+    const r = await axios.delete(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messenger_profile`,
+      {
+        params: { access_token: PAGE_ACCESS_TOKEN },
+        data: { fields: ['ice_breakers'] },
+      }
+    );
+    res.json({
+      ok: true,
+      result: r.data,
+      note: 'ice_breakers устлаа. Одоо Get Started товч гарч ирэх ёстой. Шалгахдаа тухайн Page-тэй байгаа чатаа УСТГААД дахин нээнэ үү — эдгээр нь зөвхөн шинэ ярианд харагдана.',
+    });
+  } catch (err) {
+    res.json({ ok: false, error: err.response ? err.response.data : err.message });
+  }
+});
+
 app.get('/test-ai', async (req, res) => {
   if (!ANTHROPIC_API_KEY) {
     return res.json({
