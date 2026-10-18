@@ -4,7 +4,9 @@ const axios = require('axios');
 
 const app = express();
 app.use((req, res, next) => {
-  console.log(`INCOMING REQUEST: ${req.method} ${req.url}`);
+  if (!(req.method === 'GET' && req.url === '/')) {
+    console.log(`INCOMING REQUEST: ${req.method} ${req.url}`);
+  }
   next();
 });
 app.use(express.json());
@@ -964,4 +966,30 @@ app.get('/privacy', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Bot server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Bot server running on port ${PORT}`);
+  startSelfPing();
+});
+
+// ---------------------------------------------------------------------------
+// Серверийг унтуулахгүй байлгах (self-ping)
+// ЯАГААД: Render-ийн үнэгүй сервер 15 минут хүсэлт ирэхгүй бол унтдаг. GitHub-ийн
+// "5 минут тутам" keep-alive бодит байдалд 2–10 цаг тутамд л ажилладаг байсан.
+// Тиймээс сервер өөрөө 10 минут тутам өөрийн нийтийн хаяг руу хүсэлт илгээнэ.
+// RENDER_EXTERNAL_URL-ийг Render автоматаар өгдөг; локал дээр байхгүй тул ажиллахгүй.
+// ---------------------------------------------------------------------------
+const SELF_PING_INTERVAL_MS = 10 * 60 * 1000;
+
+function startSelfPing() {
+  const selfUrl = process.env.RENDER_EXTERNAL_URL;
+  if (!selfUrl) {
+    console.log('Self-ping: RENDER_EXTERNAL_URL байхгүй тул идэвхгүй.');
+    return;
+  }
+  setInterval(() => {
+    axios
+      .get(`${selfUrl}/`, { timeout: 30000 })
+      .catch((err) => console.log('Self-ping алдаа:', err.message));
+  }, SELF_PING_INTERVAL_MS);
+  console.log(`Self-ping идэвхтэй: ${selfUrl}/ (10 минут тутам)`);
+}
