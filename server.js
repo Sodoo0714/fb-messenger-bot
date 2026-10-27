@@ -276,6 +276,19 @@ app.get('/webhook', (req, res) => {
 // Health check / keep-alive ping
 app.get('/', (req, res) => res.status(200).send('OK'));
 
+// Deploy шалгах: /version
+// Render deploy бүрт RENDER_GIT_COMMIT, RENDER_GIT_BRANCH-ийг автоматаар өгдөг.
+// Энэ commit-ийг GitHub-ийн main-ийн сүүлийн commit-тэй харьцуулж, хамгийн
+// сүүлийн өөрчлөлт deploy хийгдсэн эсэхийг мэднэ. Нууц мэдээлэл огт гаргахгүй.
+const SERVER_STARTED_AT = new Date().toISOString();
+app.get('/version', (req, res) => {
+  res.json({
+    commit: process.env.RENDER_GIT_COMMIT || null,
+    branch: process.env.RENDER_GIT_BRANCH || null,
+    startedAt: SERVER_STARTED_AT,
+  });
+});
+
 // ---------------------------------------------------------------------------
 // 2. RECEIVING MESSAGES
 // ---------------------------------------------------------------------------
