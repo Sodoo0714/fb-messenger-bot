@@ -120,6 +120,67 @@ function cancelReengage(senderId) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// АЖИЛТАН ӨӨРӨӨ БИЧИХЭД БОТЫГ ТҮР ЗОГСООХ
+// Ажилтан Page-ийн inbox-оос (Meta Business Suite г.м.) хэрэглэгчид бичихэд
+// Facebook "echo" event илгээдэг. Ботын өөрийн мессежээс ялгаж, хүн бичсэн бол
+// зөвхөн тэр хэрэглэгч дээр ботыг 12 цаг зогсооно. Ажилтан дахин бичих бүрд
+// 12 цаг шинээр эхэлнэ. Чатад "#бот" гэж бичвэл хугацаанаас өмнө буцааж асна.
+// Санах ойд хадгалагдах тул Render restart/deploy хийхэд бүх зогсолт арилна.
+// ШААРДЛАГА: Meta App-ын Webhooks тохиргоонд "message_echoes" асаалттай байх.
+// ---------------------------------------------------------------------------
+const HUMAN_PAUSE_MS = 12 * 60 * 60 * 1000; // 12 цаг
+const BOT_RESUME_COMMAND = '#бот';
+const BOT_MESSAGE_METADATA = 'sent-by-bot'; // ботын илгээсэн мессеж бүрт хавсаргана
+let botAppId = null; // эхлэхэд /app-аас авна — ботын echo-г app_id-аар нь танина
+
+const humanPausedUntil = new Map(); // senderId -> зогсолт дуусах цаг (ms)
+
+function isBotPaused(senderId) {
+  const until = humanPausedUntil.get(senderId);
+  if (!until) return false;
+  if (Date.now() < until) return true;
+  humanPausedUntil.delete(senderId);
+  return false;
+}
+
+function pauseBotForUser(senderId) {
+  humanPausedUntil.set(senderId, Date.now() + HUMAN_PAUSE_MS);
+  cancelReengage(senderId);
+}
+
+function handleEcho(event) {
+  const message = event.message;
+  const userId = event.recipient && event.recipient.id;
+  if (!userId) return;
+
+  // Ботын өөрийн мессеж (Send API-аар metadata-тай, эсвэл манай App-аас) — алгасна
+  if (message.metadata === BOT_MESSAGE_METADATA) return;
+  if (botAppId && String(message.app_id) === botAppId) return;
+
+  const text = (message.text || '').trim().toLowerCase();
+  if (text === BOT_RESUME_COMMAND) {
+    humanPausedUntil.delete(userId);
+    console.log(`Бот дахин асав (ажилтны "${BOT_RESUME_COMMAND}" тушаал) — PSID: ${userId}`);
+    return;
+  }
+
+  pauseBotForUser(userId);
+  console.log(`Ажилтан бичсэн тул бот 12 цаг зогслоо — PSID: ${userId}`);
+}
+
+async function loadBotAppId() {
+  try {
+    const r = await axios.get(`https://graph.facebook.com/${GRAPH_API_VERSION}/app`, {
+      params: { access_token: PAGE_ACCESS_TOKEN },
+    });
+    botAppId = r.data && r.data.id ? String(r.data.id) : null;
+    console.log('Bot App ID:', botAppId);
+  } catch (err) {
+    console.error('App ID авч чадсангүй:', err.response ? JSON.stringify(err.response.data) : err.message);
+  }
+}
+
 // Коммент дотор эдгээр үгсийн аль нэг байвал автоматаар хариулна (жижиг үсгээр харьцуулна)
 const COMMENT_KEYWORDS = [
   // Үнэ, төлбөр
@@ -329,8 +390,15 @@ app.post('/webhook', (req, res) => {
       const senderId = event.sender && event.sender.id;
       if (!senderId) return;
 
+      if (event.message && event.message.is_echo) return handleEcho(event);
+
+      // Ажилтан энэ хэрэглэгчтэй өөрөө ярьж байгаа бол бот хариулахгүй
+      if (isBotPaused(senderId)) {
+        console.log('Бот зогссон (ажилтан ярьж байна) — PSID:', senderId);
+        return;
+      }
+
       if (event.message) {
-        if (event.message.is_echo) return;
         if (isDuplicate(event.message.mid)) {
           console.log('Duplicate skipped:', event.message.mid);
           return;
@@ -645,6 +713,7 @@ function handleQuickReply(senderId, payload) {
       notifyHumanRequest(senderId);
       // 2 минутын дараа дагалдах мессеж илгээнэ
       setTimeout(() => {
+        if (isBotPaused(senderId)) return; // ажилтан аль хэдийн бичсэн
         sendTextWithMenu(
           senderId,
           `Сайн байна уу! Ажилтан ${STAFF_NAME} тантай холбогдож байна.\n` +
@@ -766,6 +835,8 @@ async function notifyHumanRequest(senderId) {
 // 5. SEND API WRAPPER
 // ---------------------------------------------------------------------------
 async function callSendAPI(payload) {
+  // Ботын мессежийг echo дээр танихын тулд metadata хавсаргана
+  if (payload.message) payload.message.metadata = BOT_MESSAGE_METADATA;
   try {
     await axios.post(
       `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messages`,
@@ -1000,6 +1071,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Bot server running on port ${PORT}`);
   startSelfPing();
+  loadBotAppId();
 });
 
 // ---------------------------------------------------------------------------
