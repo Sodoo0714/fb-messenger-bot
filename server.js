@@ -224,7 +224,9 @@ function isDuplicateComment(commentId) {
 // ---------------------------------------------------------------------------
 // CLAUDE AI ТОХИРГОО
 // ---------------------------------------------------------------------------
-const CLAUDE_MODEL = 'claude-haiku-4-5';
+// Haiku 4.5 монголоор заримдаа байхгүй үг зохиодог байсан ("туслахад сайлахав")
+// тул хэлний чадвар илүү Sonnet 5.5 руу шилжсэн.
+const CLAUDE_MODEL = 'claude-sonnet-5-5';
 
 const SYSTEM_PROMPT = `Чи бол Эрдэнэт хотын "Бадархундага Рашаан" хувийн эмнэлгийн Facebook чатын туслах.
 
@@ -295,19 +297,33 @@ async function askClaude(senderId, userText) {
     'https://api.anthropic.com/v1/messages',
     {
       model: CLAUDE_MODEL,
-      max_tokens: 600,
+      // Хариултаас өмнө "бодох" хэсэг орж болох тул хариулт таслагдахгүй хэмжээ
+      max_tokens: 4000,
       system: SYSTEM_PROMPT,
       messages,
+      // Чатад "low" хангалттай: энгийн асуултад бодохгүй шууд хариулна, хурдан
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'low' },
+      // Аюулгүй байдлын шүүлтүүр татгалзвал өөр загвараар дахин оролдоно
+      fallbacks: 'default',
     },
     {
       headers: {
         'x-api-key': ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'server-side-fallback-2026-07-01',
         'content-type': 'application/json',
       },
-      timeout: 15000,
+      timeout: 30000,
     }
   );
+  if (response.data.stop_reason === 'refusal') {
+    console.log('Claude татгалзсан:', JSON.stringify(response.data.stop_details));
+    return '';
+  }
+  // Хариулт "thinking" блокоор эхэлж болно — зөвхөн text-ийг авна. Түүхэнд зөвхөн
+  // текстийг хадгалдаг (thinking блокийг дахин илгээхгүй), тиймээс хуучин
+  // мессежүүдийг таслах нь API-ийн түүх засварын шалгалтад хамаарахгүй.
   const parts = response.data.content || [];
   const text = parts
     .filter((p) => p.type === 'text')
@@ -470,6 +486,19 @@ async function handleMessage(senderId, text) {
       'sainu',
       'sainuu',
       'sain',
+      // Товчилсон латин/кирилл хэлбэрүүд ("Sn baina uu" AI руу очиж алдаатай хариулт авч байсан)
+      'sn baina uu',
+      'sn bainuu',
+      'sn bn uu',
+      'sn bnu',
+      'sn bna uu',
+      'sn uu',
+      'snu',
+      'snuu',
+      'сн байна уу',
+      'сн бна уу',
+      'сн уу',
+      'снуу',
       'mend',
       'hi',
       'hello',
